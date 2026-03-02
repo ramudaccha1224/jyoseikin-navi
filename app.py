@@ -236,7 +236,7 @@ def send_and_stream(prompt: str):
 # =============================================================
 # 様式PDFプレビュー（モーダル表示）
 # =============================================================
-def get_template_path(form_key: str) -> str | None:
+def get_template_path(form_key: str):
     """form_structuresのキーに対応するテンプレートPDFのパスを返す"""
     base_dir = os.path.dirname(os.path.abspath(__file__))
     pdf_path = os.path.join(base_dir, "templates", form_key)
