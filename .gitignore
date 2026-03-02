@@ -1,0 +1,16 @@
+# APIキーを含むファイルは絶対にGitHubにアップしない
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# バックアップ
+app_backup_*.py
