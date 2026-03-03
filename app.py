@@ -210,6 +210,8 @@ def build_gemini_contents(messages: list, current_prompt: str) -> list:
 # =============================================================
 # AI応答処理（共通関数化）
 # =============================================================
+MODELS = ["gemini-2.5-flash", "gemini-2.0-flash"]
+
 def send_and_stream(prompt: str) -> bool:
     """ユーザーの質問を処理してストリーミング応答を返す共通関数。成功時True"""
     relevant_chunks = get_relevant_chunks(prompt, pdf_chunks)
@@ -223,27 +225,40 @@ def send_and_stream(prompt: str) -> bool:
     with st.chat_message("assistant"):
         placeholder = st.empty()
         full = ""
-        try:
-            for chunk in client.models.generate_content_stream(
-                model="gemini-2.5-flash",
-                contents=gemini_contents,
-                config=types.GenerateContentConfig(system_instruction=system_prompt),
-            ):
-                # Gemini 2.5 は思考チャンク(text=None)を返すことがある
-                txt = getattr(chunk, "text", None)
-                if txt:
-                    full += txt
-                    placeholder.markdown(full + "▌")
-            placeholder.markdown(full or "（回答を生成できませんでした）")
-            if full:
-                st.session_state.messages.append({"role": "assistant", "content": full})
-            return True
-        except Exception as e:
-            placeholder.empty()
-            st.error(f"⚠️ エラーが発生しました: {e}")
-            # エラー内容をセッションに保存（rerun後も表示可能に）
-            st.session_state.last_error = str(e)
-            return False
+
+        # モデルを順に試行（2.5-flash → 2.0-flash フォールバック）
+        last_error = None
+        for model_name in MODELS:
+            full = ""
+            try:
+                for chunk in client.models.generate_content_stream(
+                    model=model_name,
+                    contents=gemini_contents,
+                    config=types.GenerateContentConfig(system_instruction=system_prompt),
+                ):
+                    # Gemini 2.5 は思考チャンク(text=None)を返すことがある
+                    txt = getattr(chunk, "text", None)
+                    if txt:
+                        full += txt
+                        placeholder.markdown(full + "▌")
+                placeholder.markdown(full or "（回答を生成できませんでした）")
+                if full:
+                    st.session_state.messages.append({"role": "assistant", "content": full})
+                return True
+            except Exception as e:
+                last_error = e
+                err_str = str(e)
+                # レート制限エラーの場合は次のモデルで再試行
+                if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                    placeholder.markdown(f"⏳ {model_name} のレート制限に到達。別モデルで再試行中...")
+                    continue
+                # レート制限以外のエラーはそのまま表示
+                break
+
+        placeholder.empty()
+        st.error(f"⚠️ エラーが発生しました: {last_error}")
+        st.session_state.last_error = str(last_error)
+        return False
 
 
 # =============================================================
@@ -275,15 +290,18 @@ def confirm_reset_dialog():
 
 @st.dialog("様式プレビュー", width="large")
 def show_template_dialog(pdf_path: str):
-    """PDFをbase64 iframe でモーダル表示（追加パッケージ不要）"""
-    import base64
-    with open(pdf_path, "rb") as f:
-        pdf_data = base64.b64encode(f.read()).decode("utf-8")
-    pdf_display = (
-        f'<iframe src="data:application/pdf;base64,{pdf_data}" '
-        f'width="100%" height="800px" type="application/pdf"></iframe>'
-    )
-    st.markdown(pdf_display, unsafe_allow_html=True)
+    """PDFをページごとに画像変換してモーダル表示"""
+    try:
+        import fitz  # PyMuPDF
+    except ImportError:
+        st.error("PDF表示に必要なライブラリが読み込めませんでした。")
+        return
+    doc = fitz.open(pdf_path)
+    for page_num in range(len(doc)):
+        page = doc[page_num]
+        pix = page.get_pixmap(dpi=150)
+        st.image(pix.tobytes("png"), caption=f"ページ {page_num + 1}", use_container_width=True)
+    doc.close()
 
 
 # =============================================================
