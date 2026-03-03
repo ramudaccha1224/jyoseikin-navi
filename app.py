@@ -9,9 +9,14 @@ from dotenv import load_dotenv
 load_dotenv()
 # ローカル: .env から取得 / Streamlit Cloud: st.secrets から取得
 try:
-    api_key = st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY"))
+    api_key = st.secrets.get("GEMINI_API_KEY", None) or os.getenv("GEMINI_API_KEY")
 except Exception:
     api_key = os.getenv("GEMINI_API_KEY")
+
+if not api_key:
+    st.error("⚠️ GEMINI_API_KEY が設定されていません。Streamlit Cloud の Settings → Secrets に設定してください。")
+    st.stop()
+
 client = Client(api_key=api_key)
 
 
