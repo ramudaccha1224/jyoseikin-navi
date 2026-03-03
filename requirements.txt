@@ -3,4 +3,3 @@ google-genai
 python-dotenv
 python-docx
 openpyxl
-pymupdf

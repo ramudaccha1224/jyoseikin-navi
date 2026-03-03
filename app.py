@@ -267,18 +267,15 @@ def confirm_reset_dialog():
 
 @st.dialog("様式プレビュー", width="large")
 def show_template_dialog(pdf_path: str):
-    """PDFをページごとに画像変換してモーダル表示"""
-    try:
-        import fitz  # PyMuPDF
-    except ImportError:
-        st.error("❌ `pip install pymupdf` が必要です。")
-        return
-    doc = fitz.open(pdf_path)
-    for page_num in range(len(doc)):
-        page = doc[page_num]
-        pix = page.get_pixmap(dpi=150)
-        st.image(pix.tobytes("png"), caption=f"ページ {page_num + 1}", use_container_width=True)
-    doc.close()
+    """PDFをbase64 iframe でモーダル表示（追加パッケージ不要）"""
+    import base64
+    with open(pdf_path, "rb") as f:
+        pdf_data = base64.b64encode(f.read()).decode("utf-8")
+    pdf_display = (
+        f'<iframe src="data:application/pdf;base64,{pdf_data}" '
+        f'width="100%" height="800px" type="application/pdf"></iframe>'
+    )
+    st.markdown(pdf_display, unsafe_allow_html=True)
 
 
 # =============================================================
