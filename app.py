@@ -210,8 +210,8 @@ def build_gemini_contents(messages: list, current_prompt: str) -> list:
 # =============================================================
 # AI応答処理（共通関数化）
 # =============================================================
-def send_and_stream(prompt: str):
-    """ユーザーの質問を処理してストリーミング応答を返す共通関数"""
+def send_and_stream(prompt: str) -> bool:
+    """ユーザーの質問を処理してストリーミング応答を返す共通関数。成功時True"""
     relevant_chunks = get_relevant_chunks(prompt, pdf_chunks)
     system_prompt = build_system_prompt(
         st.session_state.selected_grant,
@@ -229,13 +229,21 @@ def send_and_stream(prompt: str):
                 contents=gemini_contents,
                 config=types.GenerateContentConfig(system_instruction=system_prompt),
             ):
-                if chunk.text:
-                    full += chunk.text
+                # Gemini 2.5 は思考チャンク(text=None)を返すことがある
+                txt = getattr(chunk, "text", None)
+                if txt:
+                    full += txt
                     placeholder.markdown(full + "▌")
-            placeholder.markdown(full)
-            st.session_state.messages.append({"role": "assistant", "content": full})
+            placeholder.markdown(full or "（回答を生成できませんでした）")
+            if full:
+                st.session_state.messages.append({"role": "assistant", "content": full})
+            return True
         except Exception as e:
+            placeholder.empty()
             st.error(f"⚠️ エラーが発生しました: {e}")
+            # エラー内容をセッションに保存（rerun後も表示可能に）
+            st.session_state.last_error = str(e)
+            return False
 
 
 # =============================================================
@@ -298,6 +306,7 @@ _defaults = {
     "review_result":  "",
     "pending_item":   None,
     "input_key":      0,
+    "last_error":     "",
 }
 for k, v in _defaults.items():
     if k not in st.session_state:
@@ -457,6 +466,11 @@ else:
 
         st.divider()
 
+        # ── 前回のエラー表示 ──────────────────────────────────
+        if st.session_state.last_error:
+            st.error(f"⚠️ 前回のエラー: {st.session_state.last_error}")
+            st.session_state.last_error = ""
+
         # ── チャット履歴の表示 ────────────────────────────────
         for msg in st.session_state.messages:
             with st.chat_message(msg["role"]):
@@ -475,8 +489,9 @@ else:
             with st.chat_message("user"):
                 st.markdown(prompt)
 
-            send_and_stream(prompt)
-            st.rerun()
+            success = send_and_stream(prompt)
+            if success:
+                st.rerun()
 
         # ── ユーザー入力欄（text_area: 2倍の高さ）────────────
         st.markdown("**質問を入力してください**")
@@ -497,9 +512,10 @@ else:
             st.session_state.messages.append({"role": "user", "content": prompt})
             with st.chat_message("user"):
                 st.markdown(prompt)
-            send_and_stream(prompt)
-            st.session_state.input_key += 1
-            st.rerun()
+            success = send_and_stream(prompt)
+            if success:
+                st.session_state.input_key += 1
+                st.rerun()
 
     # ── 右カラム（項目一覧・固定風） ─────────────────────────
     if col_right is not None:
