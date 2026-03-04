@@ -24,15 +24,34 @@ client = Client(api_key=api_key)
 # データロード
 # =============================================================
 @st.cache_data
-def load_all_knowledge():
-    base_dir = os.path.dirname(os.path.abspath(__file__))
+def load_knowledge(domain_key: str):
+    base_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "domains", domain_key)
     with open(os.path.join(base_dir, "form_structures.json"), "r", encoding="utf-8") as f:
         form_map = json.load(f)
     with open(os.path.join(base_dir, "basic_rules.json"), "r", encoding="utf-8") as f:
         rules_and_cases = json.load(f)
     with open(os.path.join(base_dir, "pdf_chunks.json"), "r", encoding="utf-8") as f:
         pdf_chunks = json.load(f)
-    return form_map, rules_and_cases, pdf_chunks
+    with open(os.path.join(base_dir, "domain_config.json"), "r", encoding="utf-8") as f:
+        domain_config = json.load(f)
+    return form_map, rules_and_cases, pdf_chunks, domain_config
+
+
+@st.cache_data
+def scan_domains() -> dict:
+    """domains/ フォルダをスキャンして {domain_key: display_name} の辞書を返す"""
+    base_dir    = os.path.dirname(os.path.abspath(__file__))
+    domains_dir = os.path.join(base_dir, "domains")
+    result = {}
+    if not os.path.isdir(domains_dir):
+        return result
+    for entry in sorted(os.listdir(domains_dir)):
+        config_path = os.path.join(domains_dir, entry, "domain_config.json")
+        if os.path.isfile(config_path):
+            with open(config_path, "r", encoding="utf-8") as f:
+                config = json.load(f)
+            result[entry] = config.get("display_name", entry)
+    return result
 
 
 # =============================================================
@@ -46,6 +65,30 @@ def truncate_half_width(text: str, max_hw: int = 120) -> str:
         if count > max_hw:
             return text[:i] + "..."
     return text
+
+
+# =============================================================
+# applies_to フィルタリング
+# =============================================================
+def get_stage_for_form(selected_form: str, cfg: dict) -> str:
+    """選択様式 → 計画届 / 支給申請 / 全般 を返す。マッピング未定義なら空文字（＝全件使用）"""
+    return cfg.get("form_to_stage", {}).get(selected_form, "")
+
+
+def filter_rules_by_stage(rules: list, stage: str) -> list:
+    """
+    stage が空または '全般（様式を特定しない）' の場合は全件返す。
+    stage が確定している場合は applies_to に stage または '全般' を含むルールのみ返す。
+    applies_to フィールド自体が存在しない古いレコードは念のため全件に含める。
+    """
+    if not stage or stage == "全般（様式を特定しない）":
+        return rules
+    return [
+        r for r in rules
+        if not r.get("applies_to")                    # 旧フォーマット（フィールドなし）は通す
+        or "全般" in r.get("applies_to", [])
+        or stage in r.get("applies_to", [])
+    ]
 
 
 # =============================================================
@@ -140,8 +183,10 @@ STEP4: 結果を ⚠️要修正 / 💡改善提案 / ✅問題なし の3段階
 # ファイル添削処理（PDF / DOCX / XLSX）
 # =============================================================
 def review_document(uploaded_file, selected_form, form_map, rules_and_cases):
-    file_name  = uploaded_file.name.lower()
-    review_sys = build_review_prompt(selected_form, form_map, rules_and_cases)
+    file_name      = uploaded_file.name.lower()
+    stage          = get_stage_for_form(selected_form, domain_config)
+    filtered_rules = filter_rules_by_stage(rules_and_cases, stage)
+    review_sys     = build_review_prompt(selected_form, form_map, filtered_rules)
 
     if file_name.endswith(".pdf"):
         pdf_bytes = uploaded_file.read()
@@ -214,11 +259,13 @@ MODELS = ["gemini-2.5-flash", "gemini-2.0-flash"]
 
 def send_and_stream(prompt: str) -> bool:
     """ユーザーの質問を処理してストリーミング応答を返す共通関数。成功時True"""
+    stage           = get_stage_for_form(st.session_state.selected_form, domain_config)
+    filtered_rules  = filter_rules_by_stage(rules_and_cases, stage)
     relevant_chunks = get_relevant_chunks(prompt, pdf_chunks)
     system_prompt = build_system_prompt(
         st.session_state.selected_grant,
         st.session_state.selected_form,
-        form_map, rules_and_cases, relevant_chunks,
+        form_map, filtered_rules, relevant_chunks,
     )
     gemini_contents = build_gemini_contents(st.session_state.messages, prompt)
 
@@ -266,8 +313,9 @@ def send_and_stream(prompt: str) -> bool:
 # =============================================================
 def get_template_path(form_key: str):
     """form_structuresのキーに対応するテンプレートPDFのパスを返す"""
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    pdf_path = os.path.join(base_dir, "templates", form_key)
+    base_dir   = os.path.dirname(os.path.abspath(__file__))
+    domain_key = st.session_state.get("selected_domain_key", "")
+    pdf_path   = os.path.join(base_dir, "domains", domain_key, "templates", form_key)
     return pdf_path if os.path.isfile(pdf_path) else None
 
 
@@ -313,18 +361,26 @@ st.set_page_config(
     page_icon="🛡️",
 )
 
-form_map, rules_and_cases, pdf_chunks = load_all_knowledge()
+available_domains = scan_domains()
+
+# 選択済みドメインの知識をロード（未選択時は空で初期化）
+_domain_key = st.session_state.get("selected_domain_key", "")
+if _domain_key:
+    form_map, rules_and_cases, pdf_chunks, domain_config = load_knowledge(_domain_key)
+else:
+    form_map, rules_and_cases, pdf_chunks, domain_config = {}, [], [], {}
 
 # ── セッション初期化 ──────────────────────────────────────────
 _defaults = {
-    "app_state":      "setup",
-    "messages":       [],
-    "selected_grant": "",
-    "selected_form":  "",
-    "review_result":  "",
-    "pending_item":   None,
-    "input_key":      0,
-    "last_error":     "",
+    "app_state":           "setup",
+    "messages":            [],
+    "selected_domain_key": "",
+    "selected_grant":      "",
+    "selected_form":       "",
+    "review_result":       "",
+    "pending_item":        None,
+    "input_key":           0,
+    "last_error":          "",
 }
 for k, v in _defaults.items():
     if k not in st.session_state:
@@ -342,30 +398,51 @@ if st.session_state.app_state == "setup":
     )
     st.markdown(
         "<p style='text-align:center;color:gray;'>"
-        "AIと対話しながら、迷わず・正確に助成金申請を完結させます"
+        "※AIによる書類作成サポートツールです。<br>"
+        "情報の正確性については担保されておりません。必要に応じて最新の公式情報をご確認ください。"
         "</p>",
         unsafe_allow_html=True,
     )
     st.divider()
 
-    st.subheader("1. 助成金制度を選択")
-    st.session_state.selected_grant = st.selectbox(
-        "助成金制度",
-        ["人材確保等支援助成金（雇用管理制度・雇用環境整備助成コース）"],
+    if not available_domains:
+        st.error("⚠️ domains/ フォルダにドメインが見つかりません。セットアップを確認してください。")
+        st.stop()
+
+    st.subheader("1. 制度を選択")
+    domain_keys   = list(available_domains.keys())
+    domain_labels = list(available_domains.values())
+    prev_domain   = st.session_state.get("selected_domain_key", "")
+    default_idx   = domain_keys.index(prev_domain) if prev_domain in domain_keys else 0
+    selected_idx  = st.selectbox(
+        "制度",
+        range(len(domain_keys)),
+        format_func=lambda i: domain_labels[i],
+        index=default_idx,
         label_visibility="collapsed",
     )
+    _sel_domain_key   = domain_keys[selected_idx]
+    _sel_domain_label = domain_labels[selected_idx]
+
+    # 選択ドメインの様式一覧を取得（キャッシュ済みなら即時返却）
+    _fm, _, _, _ = load_knowledge(_sel_domain_key)
 
     st.subheader("2. 相談・添削したい様式を選択")
-    form_options = ["全般（様式を特定しない）"] + list(form_map.keys())
-    st.session_state.selected_form = st.selectbox(
-        "様式", form_options, label_visibility="collapsed",
+    form_options   = ["全般（様式を特定しない）"] + list(_fm.keys())
+    prev_form      = st.session_state.get("selected_form", "")
+    default_form_idx = form_options.index(prev_form) if prev_form in form_options else 0
+    selected_form  = st.selectbox(
+        "様式", form_options, index=default_form_idx, label_visibility="collapsed",
     )
     st.info("💡 様式を特定するとAIの回答精度と添削の正確さが向上します。", icon="ℹ️")
 
     if st.button("相談を開始する →", use_container_width=True, type="primary"):
-        st.session_state.app_state     = "chat"
-        st.session_state.messages      = []
-        st.session_state.review_result = ""
+        st.session_state.app_state           = "chat"
+        st.session_state.selected_domain_key = _sel_domain_key
+        st.session_state.selected_grant      = _sel_domain_label
+        st.session_state.selected_form       = selected_form
+        st.session_state.messages            = []
+        st.session_state.review_result       = ""
         st.rerun()
 
 
