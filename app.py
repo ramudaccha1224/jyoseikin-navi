@@ -374,24 +374,19 @@ st.set_page_config(
 # =============================================================
 st.markdown("""
 <style>
-    /* ── PC（769px以上）：Streamlit UI要素を非表示 ── */
-    @media (min-width: 769px) {
-        header[data-testid="stHeader"]         { display: none !important; }
-        footer                                  { display: none !important; }
-        #MainMenu                               { display: none !important; }
-        [data-testid="stDecoration"]            { display: none !important; }
-        [data-testid="stDeployButton"]          { display: none !important; }
-        [data-testid="stToolbarActions"]        { display: none !important; }
-        .viewerBadge_container__1QSob          { display: none !important; }
-        .styles_viewerBadge__CvC9N             { display: none !important; }
-    }
+    /* ヘッダー（Fork・GitHubアイコン・メニュー）*/
+    header[data-testid="stHeader"]          { display: none !important; }
 
-    /* ── スマホ（768px以下）：フッターのみ非表示、ヘッダーはそのまま ── */
-    @media (max-width: 768px) {
-        footer                                  { display: none !important; }
-        .viewerBadge_container__1QSob          { display: none !important; }
-        .styles_viewerBadge__CvC9N             { display: none !important; }
-    }
+    /* フッター・ブランドバー */
+    footer                                  { display: none !important; }
+    #MainMenu                               { display: none !important; }
+
+    /* 右下のStreamlitバッジ・アイコン類 */
+    [data-testid="stDecoration"]            { display: none !important; }
+    [data-testid="stDeployButton"]          { display: none !important; }
+    [data-testid="stToolbarActions"]        { display: none !important; }
+    .viewerBadge_container__1QSob          { display: none !important; }
+    .styles_viewerBadge__CvC9N             { display: none !important; }
 </style>
 """, unsafe_allow_html=True)
 
