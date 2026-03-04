@@ -364,7 +364,7 @@ def show_template_dialog(pdf_path: str):
 # Streamlit ページ設定
 # =============================================================
 st.set_page_config(
-    page_title="書類作成エージェント",
+    page_title="書類作成AIエージェント",
     layout="wide",
     page_icon="🛡️",
 )
@@ -430,7 +430,7 @@ for k, v in _defaults.items():
 if st.session_state.app_state == "setup":
 
     st.markdown(
-        "<h1 style='text-align:center;'>🛡️ 書類作成エージェント</h1>",
+        "<h1 style='text-align:center;'>🛡️ 書類作成AIエージェント</h1>",
         unsafe_allow_html=True,
     )
     st.markdown(
@@ -492,7 +492,7 @@ else:
     # 左サイドバー（新規チャット・添削モード・様式表示）
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     with st.sidebar:
-        st.markdown("### 🛡️ 書類作成エージェント")
+        st.markdown("### 🛡️ 書類作成AIエージェント")
         st.divider()
 
         # ── 添削モード（黄色背景） ──
