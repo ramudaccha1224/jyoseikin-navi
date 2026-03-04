@@ -374,27 +374,31 @@ st.set_page_config(
 # =============================================================
 st.markdown("""
 <style>
-    /* ヘッダー：PCでは非表示、スマホではサイドバー開閉ボタンのために表示 */
+    /* ── PC（769px以上）：全Streamlit UI要素を非表示 ── */
     @media (min-width: 769px) {
-        header[data-testid="stHeader"]      { display: none !important; }
+        header[data-testid="stHeader"]         { display: none !important; }
+        footer                                  { display: none !important; }
+        #MainMenu                               { display: none !important; }
+        [data-testid="stDecoration"]            { display: none !important; }
+        [data-testid="stDeployButton"]          { display: none !important; }
+        [data-testid="stToolbarActions"]        { display: none !important; }
+        .viewerBadge_container__1QSob          { display: none !important; }
+        .styles_viewerBadge__CvC9N             { display: none !important; }
     }
+
+    /* ── スマホ（768px以下）：ヘッダーは表示、フッター・バッジは非表示 ── */
     @media (max-width: 768px) {
-        header[data-testid="stHeader"]      { display: block !important; }
-        /* スマホ：ツールバー（GitHubアイコン等）のみ非表示。ハンバーガーボタンは残す */
-        header[data-testid="stHeader"] [data-testid="stToolbar"]          { display: none !important; }
-        header[data-testid="stHeader"] [data-testid="stDecoration"]       { display: none !important; }
+        footer                                  { display: none !important; }
+        #MainMenu                               { display: none !important; }
+        [data-testid="stDecoration"]            { display: none !important; }
+        [data-testid="stDeployButton"]          { display: none !important; }
+        .viewerBadge_container__1QSob          { display: none !important; }
+        .styles_viewerBadge__CvC9N             { display: none !important; }
+        /* ヘッダーは表示（ハンバーガーメニューのため） */
+        header[data-testid="stHeader"]          { display: block !important; }
+        /* サイドバー開閉ボタンを確実に表示 */
+        [data-testid="stSidebarCollapsedControl"] { display: flex !important; }
     }
-
-    /* フッター・ブランドバー */
-    footer                                  { display: none !important; }
-    #MainMenu                               { display: none !important; }
-
-    /* 右下のStreamlitバッジ・アイコン類 */
-    [data-testid="stDecoration"]            { display: none !important; }
-    [data-testid="stDeployButton"]          { display: none !important; }
-    [data-testid="stToolbarActions"]        { display: none !important; }
-    .viewerBadge_container__1QSob          { display: none !important; }
-    .styles_viewerBadge__CvC9N             { display: none !important; }
 </style>
 """, unsafe_allow_html=True)
 
