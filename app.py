@@ -380,9 +380,9 @@ st.markdown("""
     }
     @media (max-width: 768px) {
         header[data-testid="stHeader"]      { display: block !important; }
-        /* スマホ表示時はヘッダー内のGitHubアイコン等は引き続き非表示 */
-        header[data-testid="stHeader"] a,
-        header[data-testid="stHeader"] [data-testid="stToolbar"] { display: none !important; }
+        /* スマホ：ツールバー（GitHubアイコン等）のみ非表示。ハンバーガーボタンは残す */
+        header[data-testid="stHeader"] [data-testid="stToolbar"]          { display: none !important; }
+        header[data-testid="stHeader"] [data-testid="stDecoration"]       { display: none !important; }
     }
 
     /* フッター・ブランドバー */
