@@ -283,11 +283,15 @@ def send_and_stream(prompt: str) -> bool:
                     contents=gemini_contents,
                     config=types.GenerateContentConfig(system_instruction=system_prompt),
                 ):
-                    # Gemini 2.5 は思考チャンク(text=None)を返すことがある
-                    txt = getattr(chunk, "text", None)
-                    if txt:
-                        full += txt
-                        placeholder.markdown(full + "▌")
+                    # Gemini 2.5 の思考チャンク（thought=True）をスキップ
+                    if not getattr(chunk, "candidates", None):
+                        continue
+                    for part in chunk.candidates[0].content.parts:
+                        if getattr(part, "thought", False):
+                            continue  # 思考プロセスはユーザーに表示しない
+                        if part.text:
+                            full += part.text
+                            placeholder.markdown(full + "▌")
                 placeholder.markdown(full or "（回答を生成できませんでした）")
                 if full:
                     st.session_state.messages.append({"role": "assistant", "content": full})
@@ -515,6 +519,12 @@ else:
         # カスタムCSS（右カラム独立スクロール・ユーザーメッセージ色・様式タイトル）
         st.markdown("""
         <style>
+            /* ── Streamlit UI要素を非表示 ── */
+            header[data-testid="stHeader"]   { display: none !important; }
+            footer                           { display: none !important; }
+            [data-testid="stDeployButton"]   { display: none !important; }
+            [data-testid="stDecoration"]     { display: none !important; }
+
             /* ── 様式タイトル強調 ── */
             .form-title {
                 font-size: 22px;
@@ -589,7 +599,7 @@ else:
                 st.rerun()
 
         # ── ユーザー入力欄（text_area: 2倍の高さ）────────────
-        st.markdown("**質問を入力してください**")
+        st.markdown("**質問を自由に入力してください。「何について聞きたいですか？」から選択することも可能です。**")
         user_input = st.text_area(
             "入力欄",
             placeholder="例：離職率の計算方法は？ / ③(1)欄には何を書く？",
