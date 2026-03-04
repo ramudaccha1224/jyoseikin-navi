@@ -370,9 +370,29 @@ st.set_page_config(
 )
 
 # =============================================================
-# グローバルCSS（診断用：一時的にすべて無効化）
+# グローバルCSS（全画面共通・Streamlit UI要素を非表示）
 # =============================================================
-# st.markdown("""CSS一時削除中""", unsafe_allow_html=True)
+st.markdown("""
+<style>
+    /* PC（769px以上）：ヘッダー全体を非表示 */
+    @media (min-width: 769px) {
+        header[data-testid="stHeader"]      { display: none !important; }
+    }
+    /* スマホ（768px以下）：ヘッダーは表示してハンバーガーを使えるようにする */
+
+    /* フッター・ブランドバー（全デバイス共通） */
+    footer                                  { display: none !important; }
+    #MainMenu                               { display: none !important; }
+
+    /* 右上ツールバー・右下バッジ（全デバイス共通） */
+    /* ※ ハンバーガーボタン(stSidebarCollapsedControl)はここに含まれないため安全 */
+    [data-testid="stDecoration"]            { display: none !important; }
+    [data-testid="stDeployButton"]          { display: none !important; }
+    [data-testid="stToolbarActions"]        { display: none !important; }
+    .viewerBadge_container__1QSob          { display: none !important; }
+    .styles_viewerBadge__CvC9N             { display: none !important; }
+</style>
+""", unsafe_allow_html=True)
 
 available_domains = scan_domains()
 
