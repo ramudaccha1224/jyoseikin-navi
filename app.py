@@ -365,6 +365,27 @@ st.set_page_config(
     page_icon="🛡️",
 )
 
+# =============================================================
+# グローバルCSS（全画面共通・Streamlit UI要素を非表示）
+# =============================================================
+st.markdown("""
+<style>
+    /* ヘッダー（Fork・GitHubアイコン・メニュー）*/
+    header[data-testid="stHeader"]          { display: none !important; }
+
+    /* フッター・ブランドバー */
+    footer                                  { display: none !important; }
+    #MainMenu                               { display: none !important; }
+
+    /* 右下のStreamlitバッジ・アイコン類 */
+    [data-testid="stDecoration"]            { display: none !important; }
+    [data-testid="stDeployButton"]          { display: none !important; }
+    [data-testid="stToolbarActions"]        { display: none !important; }
+    .viewerBadge_container__1QSob          { display: none !important; }
+    .styles_viewerBadge__CvC9N             { display: none !important; }
+</style>
+""", unsafe_allow_html=True)
+
 available_domains = scan_domains()
 
 # 選択済みドメインの知識をロード（未選択時は空で初期化）
@@ -519,12 +540,6 @@ else:
         # カスタムCSS（右カラム独立スクロール・ユーザーメッセージ色・様式タイトル）
         st.markdown("""
         <style>
-            /* ── Streamlit UI要素を非表示 ── */
-            header[data-testid="stHeader"]   { display: none !important; }
-            footer                           { display: none !important; }
-            [data-testid="stDeployButton"]   { display: none !important; }
-            [data-testid="stDecoration"]     { display: none !important; }
-
             /* ── 様式タイトル強調 ── */
             .form-title {
                 font-size: 22px;
