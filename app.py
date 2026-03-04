@@ -287,7 +287,10 @@ def send_and_stream(prompt: str) -> bool:
                     # Gemini 2.5 の思考チャンク（thought=True）をスキップ
                     if not getattr(chunk, "candidates", None):
                         continue
-                    for part in chunk.candidates[0].content.parts:
+                    content = chunk.candidates[0].content
+                    if not content or not content.parts:
+                        continue
+                    for part in content.parts:
                         if getattr(part, "thought", False):
                             continue  # 思考プロセスはユーザーに表示しない
                         if part.text:
@@ -371,8 +374,16 @@ st.set_page_config(
 # =============================================================
 st.markdown("""
 <style>
-    /* ヘッダー（Fork・GitHubアイコン・メニュー）*/
-    header[data-testid="stHeader"]          { display: none !important; }
+    /* ヘッダー：PCでは非表示、スマホではサイドバー開閉ボタンのために表示 */
+    @media (min-width: 769px) {
+        header[data-testid="stHeader"]      { display: none !important; }
+    }
+    @media (max-width: 768px) {
+        header[data-testid="stHeader"]      { display: block !important; }
+        /* スマホ表示時はヘッダー内のGitHubアイコン等は引き続き非表示 */
+        header[data-testid="stHeader"] a,
+        header[data-testid="stHeader"] [data-testid="stToolbar"] { display: none !important; }
+    }
 
     /* フッター・ブランドバー */
     footer                                  { display: none !important; }
