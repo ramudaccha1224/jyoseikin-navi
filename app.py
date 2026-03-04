@@ -374,14 +374,19 @@ st.set_page_config(
 # =============================================================
 st.markdown("""
 <style>
-    /* ヘッダー（Fork・GitHubアイコン・メニュー）*/
-    header[data-testid="stHeader"]          { display: none !important; }
+    /* PC（769px以上）：ヘッダー全体を非表示 */
+    @media (min-width: 769px) {
+        header[data-testid="stHeader"]      { display: none !important; }
+    }
+    /* スマホ（768px以下）：ヘッダーは表示してハンバーガーを使えるようにする */
+    /* ※ ヘッダー内のGitHubアイコン等は下のグローバルルールで非表示 */
 
-    /* フッター・ブランドバー */
+    /* フッター・ブランドバー（全デバイス共通） */
     footer                                  { display: none !important; }
     #MainMenu                               { display: none !important; }
 
-    /* 右下のStreamlitバッジ・アイコン類 */
+    /* 右上ツールバー・右下バッジ（全デバイス共通） */
+    /* ※ ハンバーガーボタン(stSidebarCollapsedControl)はここに含まれないため安全 */
     [data-testid="stDecoration"]            { display: none !important; }
     [data-testid="stDeployButton"]          { display: none !important; }
     [data-testid="stToolbarActions"]        { display: none !important; }
