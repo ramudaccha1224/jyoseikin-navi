@@ -132,7 +132,7 @@ def build_system_prompt(selected_grant, selected_form, form_map, rules_and_cases
 
 ■ 5タイプ判別と回答スタイル
   ▶ タイプ1【チェック型】→ ルールのみ。事例引用厳禁。
-  ▶ タイプ2【自由記述型】→ RAG事例を引用して記入見本を作成。
+  ▶ タイプ2【自由記述型】→ 参考事例を引用して記入見本を作成。
   ▶ タイプ3【数値・計算型】→ 計算式明示。ヒアリング後に具体的計算結果を提示。
   ▶ タイプ4【日付・期間型】→ 期限警告を最優先。
   ▶ タイプ5【選択・フラグ型】→ 定義の違いを解説し選択基準を提示。
@@ -148,9 +148,9 @@ def build_system_prompt(selected_grant, selected_form, form_map, rules_and_cases
 {json.dumps(rules_and_cases, ensure_ascii=False)}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-【活用事例（RAGデータ）— タイプ2【自由記述型】に優先活用】
+【参考事例・申請記入例（自由記述項目への回答時に優先活用）】
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-{relevant_chunks if relevant_chunks else "（関連する事例データなし）"}
+{relevant_chunks if relevant_chunks else "（関連する参考事例なし）"}
 """
 
 
