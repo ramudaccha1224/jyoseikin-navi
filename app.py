@@ -37,7 +37,6 @@ def load_knowledge(domain_key: str):
     return form_map, rules_and_cases, pdf_chunks, domain_config
 
 
-@st.cache_data
 def scan_domains() -> dict:
     """domains/ フォルダをスキャンして {domain_key: display_name} の辞書を返す"""
     base_dir    = os.path.dirname(os.path.abspath(__file__))
@@ -48,9 +47,12 @@ def scan_domains() -> dict:
     for entry in sorted(os.listdir(domains_dir)):
         config_path = os.path.join(domains_dir, entry, "domain_config.json")
         if os.path.isfile(config_path):
-            with open(config_path, "r", encoding="utf-8") as f:
-                config = json.load(f)
-            result[entry] = config.get("display_name", entry)
+            try:
+                with open(config_path, "r", encoding="utf-8") as f:
+                    config = json.load(f)
+                result[entry] = config.get("display_name", entry)
+            except Exception:
+                pass  # 読み込みに失敗したドメインはスキップ
     return result
 
 
