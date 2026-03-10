@@ -48,8 +48,7 @@ def add_form_knowledge(domain_key: str):
         return
 
     print(f"新規PDF: {len(new_pdfs)} 件 / 既存: {len(form_master)} 件 / 合計: {len(all_pdfs)} 件")
-    print("新規PDFのみ処理します:
-")
+    print("新規PDFのみ処理します:\n")
 
     for pdf_name in sorted(new_pdfs):
         pdf_path = os.path.join(template_dir, pdf_name)
@@ -125,8 +124,7 @@ def add_form_knowledge(domain_key: str):
         except Exception as e:
             print(f"エラー発生 ({pdf_name}): {e}")
 
-    print(f"
-完了！合計 {len(form_master)} 件の様式情報を '{output_path}' に保存しました。")
+    print(f"\n完了！合計 {len(form_master)} 件の様式情報を '{output_path}' に保存しました。")
 
 
 if __name__ == "__main__":
