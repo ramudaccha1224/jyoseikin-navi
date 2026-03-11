@@ -23,8 +23,18 @@ client = Client(api_key=api_key)
 # =============================================================
 # データロード
 # =============================================================
+def _domain_mtime(domain_key: str) -> str:
+    """form_structures.json の更新時刻を返す（キャッシュ無効化用）"""
+    base_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "domains", domain_key)
+    try:
+        return str(int(os.path.getmtime(os.path.join(base_dir, "form_structures.json"))))
+    except Exception:
+        return "0"
+
+
 @st.cache_data
-def load_knowledge(domain_key: str):
+def load_knowledge(domain_key: str, mtime: str = ""):
+    """ドメインの知識JSONを読み込む。mtime はキャッシュ無効化用（ファイル更新時自動リセット）"""
     base_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "domains", domain_key)
     with open(os.path.join(base_dir, "form_structures.json"), "r", encoding="utf-8") as f:
         form_map = json.load(f)
@@ -401,7 +411,9 @@ available_domains = scan_domains()
 # 選択済みドメインの知識をロード（未選択時は空で初期化）
 _domain_key = st.session_state.get("selected_domain_key", "")
 if _domain_key:
-    form_map, rules_and_cases, pdf_chunks, domain_config = load_knowledge(_domain_key)
+    form_map, rules_and_cases, pdf_chunks, domain_config = load_knowledge(
+        _domain_key, mtime=_domain_mtime(_domain_key)
+    )
 else:
     form_map, rules_and_cases, pdf_chunks, domain_config = {}, [], [], {}
 
@@ -459,8 +471,8 @@ if st.session_state.app_state == "setup":
     _sel_domain_key   = domain_keys[selected_idx]
     _sel_domain_label = domain_labels[selected_idx]
 
-    # 選択ドメインの様式一覧を取得（キャッシュ済みなら即時返却）
-    _fm, _, _, _ = load_knowledge(_sel_domain_key)
+    # 選択ドメインの様式一覧を取得（form_structures.json が更新されると自動的にキャッシュ再読込）
+    _fm, _, _, _ = load_knowledge(_sel_domain_key, mtime=_domain_mtime(_sel_domain_key))
 
     st.subheader("2. 相談・添削したい様式を選択")
     form_options   = ["全般（様式を特定しない）"] + list(_fm.keys())
