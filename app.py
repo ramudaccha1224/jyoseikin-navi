@@ -265,22 +265,24 @@ def review_document(uploaded_file, selected_form, form_map, rules_and_cases):
         )
         return response.text
 
-    elif file_name.endswith(".xlsx"):
+    elif file_name.endswith((".xlsx", ".xlsm", ".xls")):
         try:
-            import openpyxl
-            wb = openpyxl.load_workbook(io.BytesIO(uploaded_file.read()))
+            import pandas as pd
+            file_bytes = io.BytesIO(uploaded_file.read())
+            xl = pd.ExcelFile(file_bytes)
             all_text = []
-            for sn in wb.sheetnames:
-                ws = wb[sn]
+            for sn in xl.sheet_names:
+                df = xl.parse(sn, header=None, dtype=str).fillna("")
                 rows = []
-                for row in ws.iter_rows(values_only=True):
-                    rs = [str(c) if c is not None else "" for c in row]
-                    if any(s.strip() for s in rs):
-                        rows.append(" | ".join(rs))
-                all_text.append(f"【シート: {sn}】\n" + "\n".join(rows))
+                for _, row in df.iterrows():
+                    line = " | ".join(str(v) for v in row if str(v).strip())
+                    if line.strip():
+                        rows.append(line)
+                if rows:
+                    all_text.append(f"【シート: {sn}】\n" + "\n".join(rows))
             excel_text = "\n\n".join(all_text)
-        except ImportError:
-            return "❌ `pip install openpyxl` が必要です。"
+        except Exception as e:
+            return f"❌ Excelファイルの読み込みに失敗しました：{e}"
         response = client.models.generate_content(
             model="gemini-2.5-flash",
             contents=f"以下のExcelシートを添削してください：\n\n{excel_text}",
@@ -288,7 +290,35 @@ def review_document(uploaded_file, selected_form, form_map, rules_and_cases):
         )
         return response.text
 
-    return "❌ 対応形式は PDF / Word(.docx) / Excel(.xlsx) のみです。"
+    elif file_name.endswith(".csv"):
+        try:
+            import pandas as pd
+            # BOM付きUTF-8・Shift-JISどちらも試みる
+            raw = uploaded_file.read()
+            for enc in ("utf-8-sig", "shift_jis", "utf-8"):
+                try:
+                    df = pd.read_csv(io.BytesIO(raw), encoding=enc, dtype=str).fillna("")
+                    break
+                except Exception:
+                    continue
+            else:
+                return "❌ CSVのエンコーディングを判定できませんでした。UTF-8またはShift-JISで保存してください。"
+            rows = []
+            for _, row in df.iterrows():
+                line = " | ".join(str(v) for v in row if str(v).strip())
+                if line.strip():
+                    rows.append(line)
+            csv_text = "\n".join(rows)
+        except Exception as e:
+            return f"❌ CSVファイルの読み込みに失敗しました：{e}"
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=f"以下のCSVデータを添削してください：\n\n{csv_text}",
+            config=types.GenerateContentConfig(system_instruction=review_sys),
+        )
+        return response.text
+
+    return "❌ 対応形式は PDF / Word(.docx) / Excel(.xlsx .xls .xlsm) / CSV(.csv) のみです。"
 
 
 # =============================================================
@@ -721,7 +751,7 @@ elif st.session_state.app_state == "chat":
         with st.expander("📝 添削モード"):
             st.caption("申請書類をアップロードして添削します。")
             uploaded_file = st.file_uploader(
-                "申請書類", type=["pdf", "docx", "xlsx"], label_visibility="collapsed",
+                "申請書類", type=["pdf", "docx", "xlsx", "xls", "xlsm", "csv"], label_visibility="collapsed",
             )
             if uploaded_file:
                 st.success(f"📎 {uploaded_file.name}")
