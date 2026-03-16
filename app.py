@@ -605,11 +605,18 @@ elif st.session_state.app_state == "setup":
     st.info("💡 様式を特定するとAIの回答精度と添削の正確さが向上します。", icon="ℹ️")
 
     if st.button("相談を開始する →", use_container_width=True, type="primary"):
+        # タイトルを「制度名/様式名」形式で設定（様式未指定の場合は制度名のみ）
+        _conv_title = (
+            f"{_sel_domain_label}/{selected_form}"
+            if selected_form != "全般（様式を特定しない）"
+            else _sel_domain_label
+        )
         # DB に新規スレッドを作成
         conv_id = create_conversation(
             st.session_state.user_id,
             _sel_domain_key,
             selected_form,
+            title=_conv_title,
         )
         st.session_state.app_state           = "chat"
         st.session_state.selected_domain_key = _sel_domain_key
@@ -808,9 +815,6 @@ elif st.session_state.app_state == "chat":
             conv_id = st.session_state.get("current_conv_id")
             if conv_id:
                 add_message(conv_id, "user", prompt)
-                # 最初のメッセージでタイトルを自動設定
-                if len(st.session_state.messages) == 1:
-                    update_conversation_title(conv_id, prompt[:20] + ("..." if len(prompt) > 20 else ""))
             with st.chat_message("user"):
                 st.markdown(prompt)
 
@@ -839,9 +843,6 @@ elif st.session_state.app_state == "chat":
             conv_id = st.session_state.get("current_conv_id")
             if conv_id:
                 add_message(conv_id, "user", prompt)
-                # 最初のメッセージでタイトルを自動設定
-                if len(st.session_state.messages) == 1:
-                    update_conversation_title(conv_id, prompt[:20] + ("..." if len(prompt) > 20 else ""))
             with st.chat_message("user"):
                 st.markdown(prompt)
             success = send_and_stream(prompt)
