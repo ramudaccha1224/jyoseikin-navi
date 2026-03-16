@@ -35,8 +35,12 @@ if not api_key:
 
 client = Client(api_key=api_key)
 
-# DB テーブルをアプリ起動時に初期化（なければ作成）
-create_tables()
+# DB テーブルをアプリ起動時に1回だけ初期化（st.cache_resource でキャッシュ）
+@st.cache_resource
+def _init_db():
+    create_tables()
+
+_init_db()
 
 
 # =============================================================

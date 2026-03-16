@@ -5,6 +5,7 @@ db.py  –  PostgreSQL CRUD 全般（Supabase対応）
 import os
 import psycopg2
 import psycopg2.extras
+import psycopg2.pool
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
@@ -16,6 +17,22 @@ DATABASE_URL = os.getenv("DATABASE_URL", "")
 
 JST = timezone(timedelta(hours=9))
 
+# コネクションプール（アプリ起動時に1回だけ作成・再利用）
+_pool: psycopg2.pool.ThreadedConnectionPool | None = None
+
+
+def _get_pool() -> psycopg2.pool.ThreadedConnectionPool:
+    """コネクションプールを取得（なければ作成）"""
+    global _pool
+    if _pool is None or _pool.closed:
+        _pool = psycopg2.pool.ThreadedConnectionPool(
+            minconn=1,
+            maxconn=5,
+            dsn=DATABASE_URL,
+            cursor_factory=psycopg2.extras.RealDictCursor,
+        )
+    return _pool
+
 
 def _now() -> str:
     """日本時間の現在時刻を文字列で返す"""
@@ -24,16 +41,31 @@ def _now() -> str:
 
 @contextmanager
 def get_conn():
-    """PostgreSQL接続のコンテキストマネージャー（自動コミット・ロールバック・クローズ）"""
-    conn = psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
+    """コネクションプールから接続を取得するコンテキストマネージャー"""
+    pool = _get_pool()
+    conn = pool.getconn()
     try:
+        # 切断されていた場合は再接続
+        if conn.closed:
+            pool.putconn(conn, close=True)
+            conn = pool.getconn()
         yield conn
         conn.commit()
+    except psycopg2.OperationalError:
+        # 接続エラー時はプールをリセットして再試行
+        conn.rollback()
+        pool.putconn(conn, close=True)
+        global _pool
+        _pool = None
+        raise
     except Exception:
         conn.rollback()
         raise
     finally:
-        conn.close()
+        try:
+            pool.putconn(conn)
+        except Exception:
+            pass
 
 
 # =============================================================
