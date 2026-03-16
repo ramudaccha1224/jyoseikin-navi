@@ -472,10 +472,16 @@ if st.session_state.app_state == "setup":
     _sel_domain_label = domain_labels[selected_idx]
 
     # 選択ドメインの様式一覧を取得（form_structures.json が更新されると自動的にキャッシュ再読込）
-    _fm, _, _, _ = load_knowledge(_sel_domain_key, mtime=_domain_mtime(_sel_domain_key))
+    _fm, _, _, _sel_cfg = load_knowledge(_sel_domain_key, mtime=_domain_mtime(_sel_domain_key))
 
     st.subheader("2. 相談・添削したい様式を選択")
-    form_options   = ["全般（様式を特定しない）"] + list(_fm.keys())
+    # domain_config.json の form_order があればその順に並べる（未指定のものは末尾に追加）
+    _form_order   = _sel_cfg.get("form_order", [])
+    _sorted_forms = sorted(
+        _fm.keys(),
+        key=lambda f: _form_order.index(f) if f in _form_order else len(_form_order),
+    )
+    form_options   = ["全般（様式を特定しない）"] + _sorted_forms
     prev_form      = st.session_state.get("selected_form", "")
     default_form_idx = form_options.index(prev_form) if prev_form in form_options else 0
     selected_form  = st.selectbox(
