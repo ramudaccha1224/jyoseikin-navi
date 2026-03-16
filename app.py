@@ -13,6 +13,15 @@ from db import (
 )
 from auth import login, logout, require_login, require_admin
 
+# =============================================================
+# Streamlit ページ設定（最初のStreamlitコマンドとして呼び出す必要がある）
+# =============================================================
+st.set_page_config(
+    page_title="書類作成AIエージェント",
+    layout="wide",
+    page_icon="🛡️",
+)
+
 load_dotenv()
 # ローカル: .env から取得 / Streamlit Cloud: st.secrets から取得
 try:
@@ -28,18 +37,6 @@ client = Client(api_key=api_key)
 
 # DB テーブルをアプリ起動時に初期化（なければ作成）
 create_tables()
-
-# 古い会話の自動削除スケジューラー（毎日午前2時、二重起動防止）
-if not st.session_state.get("_scheduler_started"):
-    try:
-        from apscheduler.schedulers.background import BackgroundScheduler
-        from db import delete_old_conversations
-        _scheduler = BackgroundScheduler()
-        _scheduler.add_job(lambda: delete_old_conversations(days=90), "cron", hour=2, minute=0)
-        _scheduler.start()
-        st.session_state["_scheduler_started"] = True
-    except Exception:
-        pass  # スケジューラー起動失敗はアプリ動作に影響させない
 
 
 # =============================================================
@@ -399,14 +396,19 @@ def show_template_dialog(pdf_path: str):
     doc.close()
 
 
-# =============================================================
-# Streamlit ページ設定
-# =============================================================
-st.set_page_config(
-    page_title="書類作成AIエージェント",
-    layout="wide",
-    page_icon="🛡️",
-)
+
+# 古い会話の自動削除スケジューラー（毎日午前2時、二重起動防止）
+# ※ st.set_page_config() の後に置く必要がある（st.session_state使用のため）
+if not st.session_state.get("_scheduler_started"):
+    try:
+        from apscheduler.schedulers.background import BackgroundScheduler
+        from db import delete_old_conversations
+        _scheduler = BackgroundScheduler()
+        _scheduler.add_job(lambda: delete_old_conversations(days=90), "cron", hour=2, minute=0)
+        _scheduler.start()
+        st.session_state["_scheduler_started"] = True
+    except Exception:
+        pass  # スケジューラー起動失敗はアプリ動作に影響させない
 
 # =============================================================
 # グローバルCSS（全画面共通・Streamlit UI要素を非表示）
@@ -507,6 +509,43 @@ if st.session_state.app_state == "login":
 # =============================================================
 elif st.session_state.app_state == "setup":
     require_login()
+
+    # ── サイドバー（ユーザー情報・管理画面・過去の会話） ──
+    with st.sidebar:
+        st.markdown("### 🛡️ 書類作成AIエージェント")
+        st.caption(f"👤 {st.session_state.display_name}")
+        col_lo1, col_lo2 = st.columns([3, 2])
+        with col_lo2:
+            if st.button("ログアウト", use_container_width=True, key="setup_logout"):
+                logout()
+                st.rerun()
+        if st.session_state.is_admin:
+            if st.button("🔧 管理画面へ", use_container_width=True, key="setup_admin"):
+                st.session_state.app_state = "admin"
+                st.rerun()
+        st.divider()
+
+        # 過去の会話一覧
+        st.markdown("**📂 過去の会話**")
+        _conversations_setup = get_conversations_by_user(st.session_state.user_id, limit=20)
+        if _conversations_setup:
+            for _conv in _conversations_setup:
+                _label = _conv["title"]
+                _caption = _conv["updated_at"][:10] if _conv.get("updated_at") else ""
+                if st.button(_label, key=f"setup_conv_{_conv['id']}", use_container_width=True, help=_caption):
+                    _msgs = get_messages_by_conversation(_conv["id"])
+                    st.session_state.messages        = [{"role": m["role"], "content": m["content"]} for m in _msgs]
+                    st.session_state.current_conv_id = _conv["id"]
+                    st.session_state.selected_domain_key = _conv["domain_key"]
+                    st.session_state.selected_form   = _conv["form_name"]
+                    _avail = scan_domains()
+                    st.session_state.selected_grant  = _avail.get(_conv["domain_key"], _conv["domain_key"])
+                    st.session_state.app_state       = "chat"
+                    st.session_state.review_result   = ""
+                    st.session_state.pending_item    = None
+                    st.rerun()
+        else:
+            st.caption("まだ会話がありません。")
 
     st.markdown(
         "<h1 style='text-align:center;'>🛡️ 書類作成AIエージェント</h1>",
