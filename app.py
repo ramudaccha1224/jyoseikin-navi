@@ -5,6 +5,13 @@ import io
 import unicodedata
 from google.genai import Client, types
 from dotenv import load_dotenv
+from db import (
+    create_tables,
+    create_conversation, add_message, touch_conversation,
+    update_conversation_title,
+    get_conversations_by_user, get_messages_by_conversation, get_conversation,
+)
+from auth import login, logout, require_login, require_admin
 
 load_dotenv()
 # ローカル: .env から取得 / Streamlit Cloud: st.secrets から取得
@@ -18,6 +25,21 @@ if not api_key:
     st.stop()
 
 client = Client(api_key=api_key)
+
+# DB テーブルをアプリ起動時に初期化（なければ作成）
+create_tables()
+
+# 古い会話の自動削除スケジューラー（毎日午前2時、二重起動防止）
+if not st.session_state.get("_scheduler_started"):
+    try:
+        from apscheduler.schedulers.background import BackgroundScheduler
+        from db import delete_old_conversations
+        _scheduler = BackgroundScheduler()
+        _scheduler.add_job(lambda: delete_old_conversations(days=90), "cron", hour=2, minute=0)
+        _scheduler.start()
+        st.session_state["_scheduler_started"] = True
+    except Exception:
+        pass  # スケジューラー起動失敗はアプリ動作に影響させない
 
 
 # =============================================================
@@ -311,6 +333,11 @@ def send_and_stream(prompt: str) -> bool:
                 placeholder.markdown(full or "（回答を生成できませんでした）")
                 if full:
                     st.session_state.messages.append({"role": "assistant", "content": full})
+                    # DB に AI 応答を保存
+                    conv_id = st.session_state.get("current_conv_id")
+                    if conv_id:
+                        add_message(conv_id, "assistant", full)
+                        touch_conversation(conv_id)
                 return True
             except Exception as e:
                 last_error = e
@@ -419,7 +446,14 @@ else:
 
 # ── セッション初期化 ──────────────────────────────────────────
 _defaults = {
-    "app_state":           "setup",
+    # 認証
+    "app_state":           "login",   # 初期は必ずログイン画面
+    "authenticated":       False,
+    "user_id":             None,
+    "display_name":        "",
+    "is_admin":            False,
+    # 会話
+    "current_conv_id":     None,
     "messages":            [],
     "selected_domain_key": "",
     "selected_grant":      "",
@@ -435,9 +469,44 @@ for k, v in _defaults.items():
 
 
 # =============================================================
+# ログイン画面
+# =============================================================
+if st.session_state.app_state == "login":
+    st.markdown(
+        "<h1 style='text-align:center;'>🛡️ 書類作成AIエージェント</h1>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        "<p style='text-align:center;color:gray;'>ログインしてご利用ください。</p>",
+        unsafe_allow_html=True,
+    )
+    st.divider()
+
+    col_l, col_c, col_r = st.columns([1, 2, 1])
+    with col_c:
+        with st.form("login_form"):
+            input_username = st.text_input("ログインID", placeholder="ユーザーID")
+            input_password = st.text_input("パスワード", type="password")
+            submitted = st.form_submit_button("ログイン", use_container_width=True, type="primary")
+
+        if submitted:
+            user = login(input_username, input_password)
+            if user:
+                st.session_state.authenticated  = True
+                st.session_state.user_id        = user["id"]
+                st.session_state.display_name   = user["display_name"]
+                st.session_state.is_admin       = bool(user["is_admin"])
+                st.session_state.app_state      = "setup"
+                st.rerun()
+            else:
+                st.error("ログインIDまたはパスワードが正しくありません。")
+
+
+# =============================================================
 # 初期設定画面
 # =============================================================
-if st.session_state.app_state == "setup":
+elif st.session_state.app_state == "setup":
+    require_login()
 
     st.markdown(
         "<h1 style='text-align:center;'>🛡️ 書類作成AIエージェント</h1>",
@@ -490,10 +559,17 @@ if st.session_state.app_state == "setup":
     st.info("💡 様式を特定するとAIの回答精度と添削の正確さが向上します。", icon="ℹ️")
 
     if st.button("相談を開始する →", use_container_width=True, type="primary"):
+        # DB に新規スレッドを作成
+        conv_id = create_conversation(
+            st.session_state.user_id,
+            _sel_domain_key,
+            selected_form,
+        )
         st.session_state.app_state           = "chat"
         st.session_state.selected_domain_key = _sel_domain_key
         st.session_state.selected_grant      = _sel_domain_label
         st.session_state.selected_form       = selected_form
+        st.session_state.current_conv_id     = conv_id
         st.session_state.messages            = []
         st.session_state.review_result       = ""
         st.rerun()
@@ -502,13 +578,61 @@ if st.session_state.app_state == "setup":
 # =============================================================
 # チャット画面 & 添削画面
 # =============================================================
-else:
+elif st.session_state.app_state == "chat":
+    require_login()
 
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # 左サイドバー（新規チャット・添削モード・様式表示）
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     with st.sidebar:
         st.markdown("### 🛡️ 書類作成AIエージェント")
+
+        # ── ユーザー情報・ログアウト ──
+        st.caption(f"👤 {st.session_state.display_name}")
+        col_lo1, col_lo2 = st.columns([3, 2])
+        with col_lo2:
+            if st.button("ログアウト", use_container_width=True):
+                logout()
+                st.rerun()
+        if st.session_state.is_admin:
+            if st.button("🔧 管理画面へ", use_container_width=True):
+                st.session_state.app_state = "admin"
+                st.rerun()
+
+        st.divider()
+
+        # ── 過去の会話スレッド一覧 ──
+        st.markdown("**📂 過去の会話**")
+        if st.button("＋ 新しい会話を始める", use_container_width=True, type="primary"):
+            st.session_state.app_state = "setup"
+            st.session_state.current_conv_id = None
+            st.session_state.messages = []
+            st.session_state.review_result = ""
+            st.session_state.pending_item = None
+            st.rerun()
+
+        _conversations = get_conversations_by_user(st.session_state.user_id, limit=20)
+        _current_conv  = st.session_state.get("current_conv_id")
+        for _conv in _conversations:
+            _is_current = (_conv["id"] == _current_conv)
+            _label = f"{'▶ ' if _is_current else ''}{_conv['title']}"
+            _caption = _conv["updated_at"][:10] if _conv.get("updated_at") else ""
+            if st.button(_label, key=f"conv_{_conv['id']}", use_container_width=True,
+                         help=_caption, disabled=_is_current):
+                # 過去スレッドを選択して復元
+                _msgs = get_messages_by_conversation(_conv["id"])
+                st.session_state.messages        = [{"role": m["role"], "content": m["content"]} for m in _msgs]
+                st.session_state.current_conv_id = _conv["id"]
+                st.session_state.selected_domain_key = _conv["domain_key"]
+                st.session_state.selected_form   = _conv["form_name"]
+                # domain_key から表示名を復元
+                _avail = scan_domains()
+                st.session_state.selected_grant  = _avail.get(_conv["domain_key"], _conv["domain_key"])
+                st.session_state.app_state       = "chat"
+                st.session_state.review_result   = ""
+                st.session_state.pending_item    = None
+                st.rerun()
+
         st.divider()
 
         # ── 添削モード（黄色背景） ──
@@ -634,6 +758,13 @@ else:
             prompt  = f"{item_id}「{label}」について教えてください"
 
             st.session_state.messages.append({"role": "user", "content": prompt})
+            # DB にユーザーメッセージを保存
+            conv_id = st.session_state.get("current_conv_id")
+            if conv_id:
+                add_message(conv_id, "user", prompt)
+                # 最初のメッセージでタイトルを自動設定
+                if len(st.session_state.messages) == 1:
+                    update_conversation_title(conv_id, prompt[:20] + ("..." if len(prompt) > 20 else ""))
             with st.chat_message("user"):
                 st.markdown(prompt)
 
@@ -658,6 +789,13 @@ else:
         if submit and user_input.strip():
             prompt = user_input.strip()
             st.session_state.messages.append({"role": "user", "content": prompt})
+            # DB にユーザーメッセージを保存
+            conv_id = st.session_state.get("current_conv_id")
+            if conv_id:
+                add_message(conv_id, "user", prompt)
+                # 最初のメッセージでタイトルを自動設定
+                if len(st.session_state.messages) == 1:
+                    update_conversation_title(conv_id, prompt[:20] + ("..." if len(prompt) > 20 else ""))
             with st.chat_message("user"):
                 st.markdown(prompt)
             success = send_and_stream(prompt)
@@ -690,3 +828,12 @@ else:
                 if st.button(btn_label, key=f"ri-{i}", use_container_width=True):
                     st.session_state.pending_item = item
                     st.rerun()
+
+
+# =============================================================
+# 管理画面
+# =============================================================
+elif st.session_state.app_state == "admin":
+    require_admin()
+    from admin import render_admin_page
+    render_admin_page()
