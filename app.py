@@ -479,7 +479,10 @@ if st.session_state.app_state == "login":
         unsafe_allow_html=True,
     )
     st.markdown(
-        "<p style='text-align:center;color:gray;'>ログインしてご利用ください。</p>",
+        "<p style='text-align:center;color:gray;'>"
+        "AIによる書類作成サポートです。<br>"
+        "情報の正確性については保証されておりません。必要に応じて最新の公式情報をご確認ください。"
+        "</p>",
         unsafe_allow_html=True,
     )
     st.divider()
@@ -553,8 +556,8 @@ elif st.session_state.app_state == "setup":
     )
     st.markdown(
         "<p style='text-align:center;color:gray;'>"
-        "※AIによる書類作成サポートツールです。<br>"
-        "情報の正確性については担保されておりません。必要に応じて最新の公式情報をご確認ください。"
+        "AIによる書類作成サポートです。<br>"
+        "情報の正確性については保証されておりません。必要に応じて最新の公式情報をご確認ください。"
         "</p>",
         unsafe_allow_html=True,
     )
