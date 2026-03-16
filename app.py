@@ -279,9 +279,13 @@ def review_document(uploaded_file, selected_form, form_map, rules_and_cases):
 # =============================================================
 # Gemini 用コンテンツ履歴の構築
 # =============================================================
+MAX_HISTORY_MESSAGES = 20  # 直近10往復（user + assistant 各10件）
+
+
 def build_gemini_contents(messages: list, current_prompt: str) -> list:
     contents = []
-    for m in messages[:-1]:
+    history = messages[:-1][-MAX_HISTORY_MESSAGES:]  # 直近10往復に制限
+    for m in history:
         role = "user" if m["role"] == "user" else "model"
         contents.append(types.Content(role=role, parts=[types.Part(text=m["content"])]))
     contents.append(types.Content(role="user", parts=[types.Part(text=current_prompt)]))
