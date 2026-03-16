@@ -3,6 +3,7 @@ import json
 import os
 import io
 import unicodedata
+from datetime import date
 from google.genai import Client, types
 from dotenv import load_dotenv
 from db import (
@@ -195,9 +196,15 @@ def build_system_prompt(selected_grant, selected_form, form_map, rules_and_cases
 # =============================================================
 def build_review_prompt(selected_form, form_map, rules_and_cases):
     form_items = form_map.get(selected_form, {}).get("items", [])
+    today = date.today()
+    reiwa_year = today.year - 2018
+    today_str = f"{today.year}年{today.month}月{today.day}日（令和{reiwa_year}年{today.month}月{today.day}日）"
     return f"""
 あなたは助成金申請書類の専門添削員（プロの社会保険労務士）です。
 アップロードされた書類を【様式基準】と【ルール基準】に照らして厳密に添削してください。
+
+【本日の日付】{today_str}
+※ 日付の過去・未来の判定は必ず上記の本日の日付を基準にしてください。
 
 【添削手順】
 STEP1: 書類の各項目を識別し、【様式基準】のitem_idと照合する。
@@ -226,11 +233,19 @@ def review_document(uploaded_file, selected_form, form_map, rules_and_cases):
 
     if file_name.endswith(".pdf"):
         pdf_bytes = uploaded_file.read()
+        pdf_instruction = """このPDF申請書類を添削してください。
+
+【書類読み取りの重要ルール】
+- ○（丸印）・チェック（✓）は、書類に明確に記入されているものだけを「選択済み」と判定してください。
+- 複数の選択肢が並んでいる場合（例：策定・変更）、印のある選択肢のみを選択済みとし、印のない選択肢は「未選択」として扱ってください。
+- 書式の枠線・印刷の丸記号（○で囲まれた番号など）は選択の〇とは区別してください。
+- 印刷のかすれや判読が難しい場合は、「判読困難」と記載し、無理に判定しないでください。
+"""
         response = client.models.generate_content(
             model="gemini-2.5-flash",
             contents=[types.Content(role="user", parts=[
                 types.Part(inline_data=types.Blob(mime_type="application/pdf", data=pdf_bytes)),
-                types.Part(text="このPDF申請書類を添削してください。"),
+                types.Part(text=pdf_instruction),
             ])],
             config=types.GenerateContentConfig(system_instruction=review_sys),
         )
