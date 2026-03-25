@@ -703,6 +703,44 @@ elif st.session_state.app_state == "chat":
 
         st.divider()
 
+        # ── 添削モード（黄色背景） ──
+        st.markdown("""
+        <style>
+            [data-testid="stSidebar"] [data-testid="stExpander"]:has(summary:first-child) {
+                background-color: #FFF3CD;
+                border-radius: 8px;
+                padding: 2px;
+            }
+        </style>
+        """, unsafe_allow_html=True)
+
+        with st.expander("📝 添削モード"):
+            st.caption("申請書類をアップロードして添削します。")
+            uploaded_file = st.file_uploader(
+                "申請書類", type=["pdf", "docx", "xlsx", "xls", "xlsm", "csv"], label_visibility="collapsed",
+            )
+            if uploaded_file:
+                st.success(f"📎 {uploaded_file.name}")
+                if st.button("🔍 添削実行", type="primary", use_container_width=True):
+                    with st.spinner("添削中..."):
+                        st.session_state.review_result = review_document(
+                            uploaded_file, st.session_state.selected_form,
+                            form_map, rules_and_cases,
+                        )
+                    st.rerun()
+
+        # ── 最初の画面に戻る（確認ダイアログ付き） ──
+        if st.button("← 最初の画面に戻る", use_container_width=True):
+            confirm_reset_dialog()
+
+        # ── 様式を画像で表示する ──
+        template_path = get_template_path(st.session_state.selected_form)
+        if template_path:
+            if st.button("📋 様式を画像で表示する", use_container_width=True):
+                show_template_dialog(template_path)
+
+        st.divider()
+
         # ── 過去の会話スレッド一覧 ──
         st.markdown("**📂 過去の会話**")
         if st.button("＋ 新しい会話を始める", use_container_width=True, type="primary"):
@@ -734,46 +772,6 @@ elif st.session_state.app_state == "chat":
                 st.session_state.review_result   = ""
                 st.session_state.pending_item    = None
                 st.rerun()
-
-        st.divider()
-
-        # ── 添削モード（黄色背景） ──
-        st.markdown("""
-        <style>
-            [data-testid="stSidebar"] [data-testid="stExpander"]:has(summary:first-child) {
-                background-color: #FFF3CD;
-                border-radius: 8px;
-                padding: 2px;
-            }
-        </style>
-        """, unsafe_allow_html=True)
-
-        with st.expander("📝 添削モード"):
-            st.caption("申請書類をアップロードして添削します。")
-            uploaded_file = st.file_uploader(
-                "申請書類", type=["pdf", "docx", "xlsx", "xls", "xlsm", "csv"], label_visibility="collapsed",
-            )
-            if uploaded_file:
-                st.success(f"📎 {uploaded_file.name}")
-                if st.button("🔍 添削実行", type="primary", use_container_width=True):
-                    with st.spinner("添削中..."):
-                        st.session_state.review_result = review_document(
-                            uploaded_file, st.session_state.selected_form,
-                            form_map, rules_and_cases,
-                        )
-                    st.rerun()
-
-        st.divider()
-
-        # ── 最初の画面に戻る（確認ダイアログ付き） ──
-        if st.button("← 最初の画面に戻る", use_container_width=True):
-            confirm_reset_dialog()
-
-        # ── 様式を画像で表示する ──
-        template_path = get_template_path(st.session_state.selected_form)
-        if template_path:
-            if st.button("📋 様式を画像で表示する", use_container_width=True):
-                show_template_dialog(template_path)
 
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # メインエリア（チャット） + 右カラム（項目一覧）
