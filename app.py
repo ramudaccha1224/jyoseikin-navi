@@ -729,8 +729,8 @@ elif st.session_state.app_state == "chat":
                         )
                     st.rerun()
 
-        # ── 最初の画面に戻る（確認ダイアログ付き） ──
-        if st.button("← 最初の画面に戻る", use_container_width=True):
+        # ── 制度の選択画面に戻る（確認ダイアログ付き） ──
+        if st.button("← 制度の選択画面に戻る", use_container_width=True):
             confirm_reset_dialog()
 
         # ── 様式を画像で表示する ──
