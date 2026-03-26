@@ -450,18 +450,20 @@ def show_template_dialog(pdf_path: str):
 
 
 
-# 古い会話の自動削除スケジューラー（毎日午前2時、二重起動防止）
-# ※ st.set_page_config() の後に置く必要がある（st.session_state使用のため）
-if not st.session_state.get("_scheduler_started"):
+# 古い会話の自動削除スケジューラー（毎日午前2時、プロセス全体で1回だけ起動）
+# ※ st.cache_resource を使うことでユーザーセッションをまたいで1インスタンスに限定する
+@st.cache_resource
+def _start_scheduler():
     try:
         from apscheduler.schedulers.background import BackgroundScheduler
         from db import delete_old_conversations
-        _scheduler = BackgroundScheduler()
-        _scheduler.add_job(lambda: delete_old_conversations(days=90), "cron", hour=2, minute=0)
-        _scheduler.start()
-        st.session_state["_scheduler_started"] = True
+        scheduler = BackgroundScheduler()
+        scheduler.add_job(lambda: delete_old_conversations(days=90), "cron", hour=2, minute=0)
+        scheduler.start()
     except Exception:
         pass  # スケジューラー起動失敗はアプリ動作に影響させない
+
+_start_scheduler()
 
 # =============================================================
 # グローバルCSS（全画面共通・Streamlit UI要素を非表示）
