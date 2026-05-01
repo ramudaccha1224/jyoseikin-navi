@@ -15,6 +15,10 @@ load_dotenv()  # ローカル開発用 .env を読み込む
 # 環境変数から接続文字列を取得（ローカルは .env、Streamlit Cloud は Secrets）
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 
+# アプリ年度識別子（R7=令和7年度版, R8=令和8年度版）
+# 同一DBを複数年度版アプリで共有するときの会話分離キー。未設定時はR7扱い。
+APP_YEAR = os.getenv("APP_YEAR", "R7")
+
 JST = timezone(timedelta(hours=9))
 
 # コネクションプール（アプリ起動時に1回だけ作成・再利用）
@@ -106,9 +110,15 @@ def create_tables():
                 created_at      TEXT    NOT NULL
             )
             """)
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_conv_user    ON conversations(user_id)")
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_conv_updated ON conversations(updated_at)")
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_msg_conv     ON messages(conversation_id)")
+            # 既存DBへの後方互換マイグレーション: app_year カラムを追加（既存行は 'R7' 扱い）
+            cur.execute("""
+                ALTER TABLE conversations
+                ADD COLUMN IF NOT EXISTS app_year TEXT NOT NULL DEFAULT 'R7'
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_conv_user     ON conversations(user_id)")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_conv_updated  ON conversations(updated_at)")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_conv_app_year ON conversations(app_year)")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_msg_conv      ON messages(conversation_id)")
 
 
 # =============================================================
@@ -213,14 +223,30 @@ def create_conversation(user_id: int, domain_key: str, form_name: str, title: st
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """INSERT INTO conversations (user_id, domain_key, form_name, title, created_at, updated_at)
-                   VALUES (%s, %s, %s, %s, %s, %s) RETURNING id""",
-                (user_id, domain_key, form_name, title, now, now),
+                """INSERT INTO conversations (user_id, domain_key, form_name, title, created_at, updated_at, app_year)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id""",
+                (user_id, domain_key, form_name, title, now, now, APP_YEAR),
             )
             return cur.fetchone()["id"]
 
 
 def get_conversations_by_user(user_id: int, limit: int = 20, offset: int = 0) -> list[dict]:
+    """現在のアプリ年度（APP_YEAR）の会話のみを返す。年度違いのルール混入を防ぐため。"""
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT * FROM conversations
+                   WHERE user_id = %s AND app_year = %s
+                   ORDER BY updated_at DESC
+                   LIMIT %s OFFSET %s""",
+                (user_id, APP_YEAR, limit, offset),
+            )
+            rows = cur.fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_all_conversations_by_user(user_id: int, limit: int = 50, offset: int = 0) -> list[dict]:
+    """全年度の会話を返す（管理画面用）。"""
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(

@@ -15,10 +15,33 @@ from db import (
 from auth import login, logout, require_login, require_admin
 
 # =============================================================
+# アプリ年度識別（R7=令和7年度版 / R8=令和8年度版）
+# Streamlit Cloud Secrets / .env の APP_YEAR で切替。未設定時は R7 扱い。
+# =============================================================
+APP_YEAR = os.getenv("APP_YEAR", "R7")
+YEAR_LABEL = {"R7": "令和7年度版", "R8": "令和8年度版"}.get(APP_YEAR, APP_YEAR)
+YEAR_COLOR = {"R7": "#1E88E5", "R8": "#E53935"}.get(APP_YEAR, "#666666")
+
+
+def render_year_badge(size: str = "normal") -> None:
+    """画面に年度バッジを表示。size: 'normal' | 'small'"""
+    if size == "small":
+        font, pad = "0.85em", "2px 10px"
+    else:
+        font, pad = "0.95em", "4px 12px"
+    st.markdown(
+        f"<div style='text-align:center;margin:4px 0;'>"
+        f"<span style='background:{YEAR_COLOR};color:white;padding:{pad};"
+        f"border-radius:12px;font-size:{font};font-weight:bold;'>{YEAR_LABEL}</span>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+# =============================================================
 # Streamlit ページ設定（最初のStreamlitコマンドとして呼び出す必要がある）
 # =============================================================
 st.set_page_config(
-    page_title="書類作成AIエージェント",
+    page_title=f"書類作成AIエージェント（{YEAR_LABEL}）",
     layout="wide",
     page_icon="🛡️",
 )
@@ -533,6 +556,7 @@ if st.session_state.app_state == "login":
         "<h1 style='text-align:center;'>🛡️ 書類作成AIエージェント</h1>",
         unsafe_allow_html=True,
     )
+    render_year_badge()
     st.markdown(
         "<p style='text-align:center;color:gray;'>"
         "AIによる書類作成サポートです。<br>"
@@ -571,6 +595,7 @@ elif st.session_state.app_state == "setup":
     # ── サイドバー（ユーザー情報・管理画面・過去の会話） ──
     with st.sidebar:
         st.markdown("### 🛡️ 書類作成AIエージェント")
+        render_year_badge(size="small")
         st.caption(f"👤 {st.session_state.display_name}")
         col_lo1, col_lo2 = st.columns([3, 2])
         with col_lo2:
@@ -609,6 +634,7 @@ elif st.session_state.app_state == "setup":
         "<h1 style='text-align:center;'>🛡️ 書類作成AIエージェント</h1>",
         unsafe_allow_html=True,
     )
+    render_year_badge()
     st.markdown(
         "<p style='text-align:center;color:gray;'>"
         "AIによる書類作成サポートです。<br>"
@@ -690,6 +716,7 @@ elif st.session_state.app_state == "chat":
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     with st.sidebar:
         st.markdown("### 🛡️ 書類作成AIエージェント")
+        render_year_badge(size="small")
 
         # ── ユーザー情報・ログアウト ──
         st.caption(f"👤 {st.session_state.display_name}")

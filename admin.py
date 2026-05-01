@@ -6,8 +6,12 @@ from auth import require_admin, hash_password
 from db import (
     get_all_users, create_user, update_password, set_user_active, delete_user,
     get_all_user_stats,
-    get_conversations_by_user, get_messages_by_conversation,
+    get_all_conversations_by_user, get_messages_by_conversation,
 )
+
+
+def _year_label(app_year: str) -> str:
+    return {"R7": "令和7年度版", "R8": "令和8年度版"}.get(app_year or "R7", app_year or "R7")
 
 
 def render_admin_page():
@@ -157,7 +161,7 @@ def _render_conversation_viewer():
     if not selected_user:
         return
 
-    convs = get_conversations_by_user(selected_user["id"], limit=50)
+    convs = get_all_conversations_by_user(selected_user["id"], limit=100)
     if not convs:
         st.info("このユーザーの会話履歴はありません。")
         return
@@ -165,13 +169,16 @@ def _render_conversation_viewer():
     selected_conv = st.selectbox(
         "会話を選択",
         options=convs,
-        format_func=lambda c: f"{c['title']}　（{c['updated_at'][:10]}）",
+        format_func=lambda c: f"[{_year_label(c.get('app_year'))}] {c['title']}　（{c['updated_at'][:10]}）",
     )
 
     if not selected_conv:
         return
 
-    st.caption(f"制度: {selected_conv['domain_key']}　様式: {selected_conv['form_name']}")
+    st.caption(
+        f"年度: {_year_label(selected_conv.get('app_year'))}　"
+        f"制度: {selected_conv['domain_key']}　様式: {selected_conv['form_name']}"
+    )
     st.divider()
 
     messages = get_messages_by_conversation(selected_conv["id"])
