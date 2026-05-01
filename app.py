@@ -95,21 +95,27 @@ def load_knowledge(domain_key: str, mtime: str = ""):
 
 
 def scan_domains() -> dict:
-    """domains/ フォルダをスキャンして {domain_key: display_name} の辞書を返す"""
+    """domains/ フォルダをスキャンして {domain_key: display_name} の辞書を返す。
+    必須JSON (domain_config / form_structures / basic_rules / pdf_chunks) が揃っているドメインのみ返す。
+    未完成のドメインを除外することで FileNotFoundError を防ぐ。"""
     base_dir    = os.path.dirname(os.path.abspath(__file__))
     domains_dir = os.path.join(base_dir, "domains")
+    required = ("domain_config.json", "form_structures.json", "basic_rules.json", "pdf_chunks.json")
     result = {}
     if not os.path.isdir(domains_dir):
         return result
     for entry in sorted(os.listdir(domains_dir)):
-        config_path = os.path.join(domains_dir, entry, "domain_config.json")
-        if os.path.isfile(config_path):
-            try:
-                with open(config_path, "r", encoding="utf-8") as f:
-                    config = json.load(f)
-                result[entry] = config.get("display_name", entry)
-            except Exception:
-                pass  # 読み込みに失敗したドメインはスキップ
+        domain_dir = os.path.join(domains_dir, entry)
+        if not os.path.isdir(domain_dir):
+            continue
+        if not all(os.path.isfile(os.path.join(domain_dir, fn)) for fn in required):
+            continue
+        try:
+            with open(os.path.join(domain_dir, "domain_config.json"), "r", encoding="utf-8") as f:
+                config = json.load(f)
+            result[entry] = config.get("display_name", entry)
+        except Exception:
+            pass  # 読み込みに失敗したドメインはスキップ
     return result
 
 
